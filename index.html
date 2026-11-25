@@ -587,8 +587,12 @@ const WX=c=>c===0?['☀️','Clear']:c<3?['🌤️','Partly cloudy']:c===3?['☁
 async function loadWeather(p){const u=storage.get('unit','C'),box=$('#wx');box.textContent='Loading…';
 try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto&temperature_unit=${u==='F'?'fahrenheit':'celsius'}&wind_speed_unit=${u==='F'?'mph':'kmh'}`);
 if(!r.ok)throw 0;const j=await r.json(),c=j.current,[ic,desc]=WX(c.weather_code);storage.set('place',p);
-const days=j.daily.time.slice(1).map((d,i)=>{const [e]=WX(j.daily.weather_code[i+1]);return `<div>${new Date(d+'T12:00').toLocaleDateString([],{weekday:'short'})}<br>${e} ${Math.round(j.daily.temperature_2m_max[i+1])}° / ${Math.round(j.daily.temperature_2m_min[i+1])}°</div>`}).join('');
-box.innerHTML=`<span class="wx-big">${ic}</span><div><b style="font:700 28px var(--head)">${Math.round(c.temperature_2m)}°${u}</b> ${desc}<br>${esc(p.label)} · feels ${Math.round(c.apparent_temperature)}° · humidity ${c.relative_humidity_2m}% · wind ${Math.round(c.wind_speed_10m)} ${u==='F'?'mph':'km/h'}</div><div class="fc">${days}</div>`}
+const icon=document.createElement('span');icon.className='wx-big';icon.textContent=ic;
+const details=document.createElement('div'),temp=document.createElement('b');temp.style.cssText='font:700 28px var(--head)';temp.textContent=`${Math.round(c.temperature_2m)}°${u}`;
+details.append(temp,document.createTextNode(` ${desc}`),document.createElement('br'),document.createTextNode(`${p.label} · feels ${Math.round(c.apparent_temperature)}° · humidity ${c.relative_humidity_2m}% · wind ${Math.round(c.wind_speed_10m)} ${u==='F'?'mph':'km/h'}`));
+const forecast=document.createElement('div');forecast.className='fc';
+j.daily.time.slice(1).forEach((d,i)=>{const day=document.createElement('div'),[emoji]=WX(j.daily.weather_code[i+1]);day.textContent=`${new Date(d+'T12:00').toLocaleDateString([],{weekday:'short'})} ${emoji} ${Math.round(j.daily.temperature_2m_max[i+1])}° / ${Math.round(j.daily.temperature_2m_min[i+1])}°`;forecast.appendChild(day)});
+box.replaceChildren(icon,details,forecast)}
 catch{box.textContent='Could not load weather. Check your connection and try again.'}}
 async function byCity(){const city=$('#city').value.trim();if(!city){toast('Enter a city or use Locate me.');return}
 try{const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`),j=await r.json();
@@ -646,12 +650,78 @@ $('#bgToggle').onclick=openBg;
 
 /* EXPORT / IMPORT */
 const KEYS=['links','notes','todos','name','theme','engine','clock','unit','place','bgMode','bgImageUrl','bgOpacity','bgBlur','cursorFx','streakStyle','sfx','sfxVol','sessions','habits','intent','zones','modes','ai','streaks'];
-$('#exportBtn').onclick=()=>{const d={};KEYS.forEach(k=>{const v=storage.get(k,undefined);if(v!==undefined)d[k]=v});
+const BACKUP_VERSION=1;
+$('#exportBtn').onclick=()=>{const d={schemaVersion:BACKUP_VERSION};KEYS.forEach(k=>{const v=storage.get(k,undefined);if(v!==undefined)d[k]=v});
 const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.download='neon-stark-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Backup downloaded')};
 $('#importBtn').onclick=()=>$('#importFile').click();
+const isRecord=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const hasShape=(v,allowed,required=allowed)=>isRecord(v)&&Object.keys(v).every(k=>allowed.includes(k))&&required.every(k=>Object.hasOwn(v,k));
+const isString=v=>typeof v==='string';
+const isFiniteNumber=v=>typeof v==='number'&&Number.isFinite(v);
+const isDateKey=v=>isString(v)&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+function checkedWebUrl(v){if(!isString(v))return null;try{const u=new URL(v);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u:null}catch{return null}}
+function validateBackup(d){
+if(!hasShape(d,['schemaVersion',...KEYS],['schemaVersion'])||d.schemaVersion!==BACKUP_VERSION)throw new Error('Unsupported or invalid backup format.');
+const out={};
+for(const k of KEYS){if(!Object.hasOwn(d,k))continue;const v=d[k];let ok=false;
+switch(k){
+case'links':
+ok=Array.isArray(v)&&v.every(x=>hasShape(x,['label','url'])&&isString(x.label)&&checkedWebUrl(x.url));
+if(ok)out[k]=v.map(x=>({label:x.label,url:checkedWebUrl(x.url).href}));
+break;
+case'notes':ok=Array.isArray(v)&&v.every(isString);break;
+case'todos':
+ok=Array.isArray(v)&&v.every(x=>hasShape(x,['text','done','due','pri','notified'],['text','done','due','pri'])&&isString(x.text)&&typeof x.done==='boolean'&&(x.due===null||isFiniteNumber(x.due))&&['l','m','h'].includes(x.pri)&&(!Object.hasOwn(x,'notified')||typeof x.notified==='boolean'));
+break;
+case'name':ok=isString(v);break;
+case'theme':ok=THEMES.some(x=>x[0]===v);break;
+case'engine':ok=['https://www.google.com/search?q=','https://duckduckgo.com/?q=','https://www.bing.com/search?q=','https://www.youtube.com/results?search_query=','https://en.wikipedia.org/w/index.php?search='].includes(v);break;
+case'clock':ok=hasShape(v,['h12','sec'])&&typeof v.h12==='boolean'&&typeof v.sec==='boolean';break;
+case'unit':ok=['C','F'].includes(v);break;
+case'place':ok=hasShape(v,['lat','lon','label'])&&isFiniteNumber(v.lat)&&v.lat>=-90&&v.lat<=90&&isFiniteNumber(v.lon)&&v.lon>=-180&&v.lon<=180&&isString(v.label);break;
+case'bgMode':ok=['reactor','stars','rain','network','image','none'].includes(v);break;
+case'bgImageUrl':ok=isString(v)&&(!!checkedWebUrl(v)||/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(v));break;
+case'bgOpacity':ok=isFiniteNumber(v)&&v>=.1&&v<=1;break;
+case'bgBlur':ok=isFiniteNumber(v)&&v>=0&&v<=14;break;
+case'cursorFx':ok=['auto','off','glow','trail','sparks','audi'].includes(v);break;
+case'streakStyle':ok=['auto','flame','gauge'].includes(v);break;
+case'sfx':ok=typeof v==='boolean';break;
+case'sfxVol':ok=isFiniteNumber(v)&&v>=0&&v<=1;break;
+case'sessions':ok=hasShape(v,['date','n'])&&isString(v.date)&&Number.isInteger(v.n)&&v.n>=0;break;
+case'habits':ok=Array.isArray(v)&&v.every(x=>hasShape(x,['name','days'])&&isString(x.name)&&Array.isArray(x.days)&&x.days.every(isDateKey));break;
+case'intent':ok=hasShape(v,['date','text'])&&isString(v.date)&&isString(v.text);break;
+case'zones':ok=Array.isArray(v)&&v.every(z=>{if(!isString(z))return false;try{new Intl.DateTimeFormat([],{timeZone:z});return true}catch{return false}});break;
+case'modes':ok=hasShape(v,['focus','short','long'])&&['focus','short','long'].every(m=>Number.isInteger(v[m])&&v[m]>=1&&v[m]<=180);break;
+case'ai':{
+const base=isRecord(v)?checkedWebUrl(v.base):null;
+ok=hasShape(v,['provider','base','model','name','persona','extra','temp','max','ctx'])&&['anthropic','deepseek','openai'].includes(v.provider)&&!!base&&isString(v.model)&&isString(v.name)&&['balanced','concise','coach','mentor','creative'].includes(v.persona)&&isString(v.extra)&&isString(v.temp)&&(v.temp===''||(Number.isFinite(+v.temp)&&+v.temp>=0&&+v.temp<=2))&&Number.isInteger(v.max)&&v.max>=100&&v.max<=8000&&typeof v.ctx==='boolean';
+if(ok)out[k]={...v,base:base.href.replace(/\/$/,'')};
+break}
+case'streaks':{
+const ids=new Set();
+ok=Array.isArray(v)&&v.length<=12&&v.every(x=>{
+if(!hasShape(x,['id','name','auto','days'])||!isString(x.id)||!isString(x.name)||typeof x.auto!=='boolean'||!Array.isArray(x.days)||x.days.length>800||!x.days.every(isDateKey)||ids.has(x.id)||(x.auto?x.id!=='tasks':!/^s[a-z0-9]+$/.test(x.id)))return false;
+ids.add(x.id);return true});
+break}
+}
+if(!ok)throw new Error('Backup contains invalid data for "'+k+'".');
+if(!Object.hasOwn(out,k))out[k]=v;
+}
+return out}
+function mergeBackup(d){
+const entries=Object.entries(d).map(([k,v])=>[k,JSON.stringify(v)]),previous=new Map(entries.map(([k])=>[k,localStorage.getItem(k)]));
+try{entries.forEach(([k,v])=>localStorage.setItem(k,v))}
+catch(error){let rollbackFailed=false;for(const [k,v] of previous){try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch{rollbackFailed=true}}
+throw new Error(rollbackFailed?'Could not apply the backup and storage rollback was incomplete.':'Could not apply the backup; previous values were restored.')}
+}
 $('#importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
-try{const d=JSON.parse(await f.text());if(!d||typeof d!=='object'||Array.isArray(d))throw 0;if(!confirm('Import this backup? It will replace your current data.'))return;
-KEYS.forEach(k=>{if(k in d)storage.set(k,d[k])});location.reload()}catch{toast('That file is not a valid backup.')}};
+try{
+const d=validateBackup(JSON.parse(await f.text()));
+if(!confirm('Merge this backup with your current data? Keys not included in the backup are kept. API key, AI chat history and the active focus timer are not included.'))return;
+const currentAi=getAi(),hasKey=!!storage.get('aiKey','');
+if(hasKey&&d.ai&&(d.ai.provider!==currentAi.provider||d.ai.base!==currentAi.base)&&!confirm(`This backup changes the AI provider or base URL to ${new URL(d.ai.base).origin}. Your existing API key will remain stored and may be sent to this host if you use AI. Apply this AI configuration?`)){toast('Import cancelled; no data was changed.');return}
+mergeBackup(d);location.reload()
+}catch(error){toast(error.message||'That file is not a valid backup.')}};
 
 /* COMMAND PALETTE */
 let palItems=[],palIdx=0;
@@ -843,7 +913,7 @@ const t=c.provider==='anthropic'?(j.type==='content_block_delta'?j.delta?.text:'
 if(t){out+=t;bub.innerHTML=fmtMd(out);log.scrollTop=log.scrollHeight}}catch{}}}
 if(err)throw new Error(err);if(!out.trim())throw new Error('The model returned an empty response.');ok=true}
 catch(e){if(e.name==='AbortError')ok=out.trim().length>0;
-else errMsg=/Failed to fetch|NetworkError|Load failed/i.test(e.message)?"Couldn't reach the provider. Check your connection, base URL and key (for Ollama, start it with OLLAMA_ORIGINS=*). If everything is correct, the provider may be blocking requests from web pages (CORS).":e.message+(/^40[123]/.test(e.message)?' — check your API key, model name and account balance.':'')}
+else errMsg=/Failed to fetch|NetworkError|Load failed/i.test(e.message)?"Couldn't reach the provider. Check your connection, base URL and key (for Ollama, allow the origin you use to open this page). If everything is correct, the provider may be blocking requests from web pages (CORS).":e.message+(/^40[123]/.test(e.message)?' — check your API key, model name and account balance.':'')}
 aiBusy=false;aiCtl=null;$('#aiSend').textContent='Send';
 if(ok){aiChat.push({role:'assistant',content:out});aiChat=aiChat.slice(-40);storage.set('aiChat',aiChat);bub.replaceWith(msgEl('assistant',out))}
 else{aiChat.pop();ub.remove();bub.remove();$('#aiIn').value=text;if(errMsg){const e=document.createElement('div');e.className='msg err';e.textContent='⚠ '+errMsg;log.appendChild(e)}}
@@ -887,16 +957,24 @@ function burst(el){for(let i=0;i<16;i++){const sp=document.createElement('i'),a=
 sp.style.cssText=`--dx:${Math.cos(a)*r}px;--dy:${Math.sin(a)*r-30}px;left:50%;top:38%;background:${['#ff3d00','#ff8f00','#ffd54f','#fff'][i%4]}`;el.appendChild(sp);setTimeout(()=>sp.remove(),950)}}
 function renderStreaks(force){const wrap=$('#streaks');if(!wrap)return;const list=getStreaks().map(x=>({x,c:calcStreak(x.days)}));
 const sig=JSON.stringify([streakKind(),list.map(({x,c})=>[x.id,x.name,c.n,c.best,c.state,c.doneToday,Math.floor(c.left)])]);if(!force&&sig===stSig&&!fxId)return;stSig=sig;
-const seen=storage.get('stSeen',{});let brk=false;list.forEach(({x,c})=>{if(c.state==='broken'&&seen[x.id]&&seen[x.id]!=='broken')brk=true;seen[x.id]=c.state});storage.set('stSeen',seen);if(brk)sfxPlay('break');
+const seen=Object.assign(Object.create(null),storage.get('stSeen',{}));let brk=false;list.forEach(({x,c})=>{if(c.state==='broken'&&seen[x.id]&&seen[x.id]!=='broken')brk=true;seen[x.id]=c.state});storage.set('stSeen',seen);if(brk)sfxPlay('break');
 const tk=list.find(o=>o.x.id==='tasks');$('#stStreak').textContent=tk?tk.c.n:0;document.documentElement.style.setProperty('--ws',Math.max(.22,.5-(tk?tk.c.n:0)*.02).toFixed(2)+'s');
-wrap.innerHTML=list.map(({x,c})=>{const hm=`${Math.floor(c.left)}h ${Math.floor((c.left%1)*60)}m`;
-const sub=c.state==='none'?(x.auto?'Add a task to ignite it':'Check in to start'):c.state==='broken'?`Streak broken · best ${c.best}. Restart today!`:c.state==='risk'?`⚠ ${hm} left — don't lose it!`:c.doneToday?`${c.n}-day streak · best ${c.best}`:(x.auto?'Add a task today to keep it alive':'Check in today to keep it alive');
-const dots=[...Array(7)].map((_,k)=>{const d=new Date();d.setDate(d.getDate()-6+k);return x.days.includes(dkey(d))?'<b>●</b>':'○'}).join('');
-const act=x.auto?`<div class="hint" style="margin:0">Auto · counts when you add a task</div>`:`<button type="button" data-ci="${x.id}" class="${c.doneToday?'':'primary'}" style="padding:7px 14px">${c.doneToday?'✓ Done today · undo':'Check in today'}</button>`;
-return `<div class="st st-${c.state}" data-id="${x.id}">${x.auto?'':`<button type="button" class="x" data-dl="${x.id}" aria-label="Delete ${esc(x.name)}">✕</button>`}${streakKind()==='gauge'?gaugeSvg(c.state,c.n):flameSvg(c.state)}<div class="st-num">${c.n}</div><div class="st-name">${esc(x.name)}</div><div class="st-sub">${esc(sub)}</div><div class="st-dots" aria-hidden="true">${dots}</div>${act}</div>`}).join('');
-$$('[data-ci]',wrap).forEach(b=>b.onclick=()=>streakToggle(b.dataset.ci));
-$$('[data-dl]',wrap).forEach(b=>b.onclick=()=>{if(!confirm('Delete this streak and its history?'))return;saveStreaks(getStreaks().filter(x=>x.id!==b.dataset.dl));renderStreaks(true)});
-if(fxId){const t=$(`[data-id="${fxId}"]`,wrap);if(t){t.classList.add('pop');burst(t)}fxId=null}}
+const cards=list.map(({x,c})=>{
+const card=document.createElement('div');card.className=`st st-${c.state}`;card.dataset.id=x.id;
+if(!x.auto){const del=document.createElement('button');del.type='button';del.className='x';del.dataset.dl=x.id;del.setAttribute('aria-label',`Delete ${x.name}`);del.textContent='✕';del.onclick=()=>{if(!confirm('Delete this streak and its history?'))return;saveStreaks(getStreaks().filter(y=>y.id!==del.dataset.dl));renderStreaks(true)};card.appendChild(del)}
+const icon=document.createElement('div');icon.innerHTML=streakKind()==='gauge'?gaugeSvg(c.state,c.n):flameSvg(c.state);card.appendChild(icon.firstElementChild);
+const number=document.createElement('div');number.className='st-num';number.textContent=c.n;
+const name=document.createElement('div');name.className='st-name';name.textContent=x.name;
+const left=`${Math.floor(c.left)}h ${Math.floor((c.left%1)*60)}m`;
+const sub=document.createElement('div');sub.className='st-sub';sub.textContent=c.state==='none'?(x.auto?'Add a task to ignite it':'Check in to start'):c.state==='broken'?`Streak broken · best ${c.best}. Restart today!`:c.state==='risk'?`⚠ ${left} left — don't lose it!`:c.doneToday?`${c.n}-day streak · best ${c.best}`:(x.auto?'Add a task today to keep it alive':'Check in today to keep it alive');
+const dots=document.createElement('div');dots.className='st-dots';dots.setAttribute('aria-hidden','true');
+for(let k=0;k<7;k++){const day=new Date();day.setDate(day.getDate()-6+k);const dot=document.createElement(x.days.includes(dkey(day))?'b':'span');dot.textContent='●';dots.appendChild(dot);if(k<6)dots.appendChild(document.createTextNode(' '))}
+card.append(number,name,sub,dots);
+if(x.auto){const auto=document.createElement('div');auto.className='hint';auto.style.margin='0';auto.textContent='Auto · counts when you add a task';card.appendChild(auto)}
+else{const check=document.createElement('button');check.type='button';check.dataset.ci=x.id;check.className=c.doneToday?'':'primary';check.style.padding='7px 14px';check.textContent=c.doneToday?'✓ Done today · undo':'Check in today';check.onclick=()=>streakToggle(check.dataset.ci);card.appendChild(check)}
+return card});
+wrap.replaceChildren(...cards);
+if(fxId){const t=[...wrap.children].find(card=>card.dataset.id===fxId);if(t){t.classList.add('pop');burst(t)}fxId=null}}
 function streakMark(id,on){const a=getStreaks(),x=a.find(y=>y.id===id);if(!x)return;const t=dkey(new Date()),had=x.days.includes(t);
 if(on&&!had){x.days.push(t);x.days=x.days.slice(-800);saveStreaks(a);fxId=id;const n=calcStreak(x.days).n;sfxPlay('fire',n);
 toast(n===1?'🔥 Streak started!':[3,7,14,21,30,50,100,200,365].includes(n)?`🔥 ${n}-day streak — keep it burning!`:`🔥 ${n}-day streak`,3500)}

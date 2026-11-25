@@ -54,7 +54,7 @@ Graphite glass cards, pill-shaped controls and an animated light bar across the 
 ## Features
 
 ### Productivity
-- **Streaks:** an automatic **Task streak** (grows every day you add a task) plus up to 12 custom streaks you check in by hand.
+- **Streaks:** an automatic **Task streak** (grows every day you add a task) plus up to 11 custom streaks you check in by hand (12 streaks total).
   - Flame states: not started, burning, **flickering in the last 6 hours of the day**, and **black and empty with rising smoke** when broken.
   - In the Audi themes, streaks show as a **rev gauge** instead: the needle sweeps up with your streak, shakes in the red zone and a warning light blinks before a streak ends.
   - Spark bursts and a toast on milestone days.
@@ -86,7 +86,7 @@ Calculator (supports `15% of 200` and `2^10`), stopwatch with laps, secure passw
 - **Showcase mode** (`H`): hides all the UI and leaves only the animation.
 
 ### Your data
-Everything is stored in your browser's `localStorage`. Use **Export data / Import data** in the footer to back up or move a JSON copy.
+Everything is stored in your browser's `localStorage`. **Export data / Import data** backs up supported settings and productivity data in a versioned JSON file. The API key, AI chat history and active focus timer are not exported. Import merges keys present in the backup and leaves other saved data unchanged.
 
 ---
 
@@ -110,7 +110,7 @@ Switch themes with the **Theme** button, the `D` key, or **Personalize**.
 
 ## Quick start
 
-1. Download `index.html` (or the single file `newtab.html` if you got it separately).
+1. Download `index.html`.
 2. Double-click it to open it in your browser.
 3. Click **Personalize** to set your name, theme, cursor effect, sound volume and more.
 
@@ -158,7 +158,7 @@ Switch themes with the **Theme** button, the `D` key, or **Personalize**.
 Notes:
 - Your key is stored **in plain text in your browser's local storage**. Use a dedicated key with a spend limit. It is **never included in exports** and is removed by **Forget key** or **Reset all data**.
 - Some providers block requests made directly from web pages (CORS). If you see "Couldn't reach the provider" with a correct key, use a provider that allows browser requests, or a small local proxy.
-- For Ollama, start it with `OLLAMA_ORIGINS=*` so the page may connect.
+- For Ollama, configure `OLLAMA_ORIGINS` to allow the origin you actually use to open this page. Using `*` is a broader local-development trade-off, not the recommended default.
 
 ---
 
@@ -172,6 +172,7 @@ The page has no analytics and no backend. Depending on what you use, your browse
 | Google favicon service | Quick-link icons |
 | Open-Meteo | Weather and city lookup |
 | Your chosen AI provider | AI assistant messages |
+| Host serving your chosen background image URL | Background image |
 
 Without internet, the page still works: you get system fonts and letter icons, but no weather or AI.
 
@@ -207,7 +208,6 @@ Plain HTML, CSS and JavaScript in one file. No framework, no bundler, no externa
 .
 ├── index.html                  # the whole app
 ├── README.md
-├── LICENSE                     # add your chosen licence
 └── assets/
     ├── banner.svg              # animated README banner (spinning wheels)
     └── screenshots/
@@ -222,4 +222,4 @@ Plain HTML, CSS and JavaScript in one file. No framework, no bundler, no externa
 
 This is a fan-made personal project. It is **not affiliated with, endorsed by or sponsored by Audi AG, Marvel or Disney**. "Audi", the four-ring emblem, "Iron Man" and "Stark" are trademarks of their respective owners. The ring emblem here is a simple original drawing made from circles, not an official logo file. Car names are used only as a design theme.
 
-<p align="center">Made by <b>@gowdavikas253-png</b> · Issues and ideas are welcome</p>
+<p align="center">Made by <b><a href="https://github.com/gowdavikas253-png">@gowdavikas253-png</a></b> and Claude · Issues and ideas are welcome</p>
