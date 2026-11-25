@@ -222,10 +222,4 @@ Plain HTML, CSS and JavaScript in one file. No framework, no bundler, no externa
 
 This is a fan-made personal project. It is **not affiliated with, endorsed by or sponsored by Audi AG, Marvel or Disney**. "Audi", the four-ring emblem, "Iron Man" and "Stark" are trademarks of their respective owners. The ring emblem here is a simple original drawing made from circles, not an official logo file. Car names are used only as a design theme.
 
-## License
-
-No license file yet. All rights reserved until the owner adds one (MIT is the intended candidate).
-
----
-
-Made by **[@gowdavikas253-png](https://github.com/gowdavikas253-png)** and **Claude** · Issues and ideas are welcome
+<p align="center">Made by <b><a href="https://github.com/gowdavikas253-png">@gowdavikas253-png</a></b> and Claude · Issues and ideas are welcome</p>
